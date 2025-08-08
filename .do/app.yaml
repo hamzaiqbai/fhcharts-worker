@@ -1,0 +1,28 @@
+name: fhcharts-worker
+services:
+- name: fhcharts-worker
+  source_dir: /
+  github:
+    repo: YOUR_GITHUB_USERNAME/fhcharts-worker
+    branch: main
+  run_command: python app.py
+  environment_slug: python
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  http_port: 8080
+  health_check:
+    http_path: /health
+  envs:
+  - key: SYMBOL
+    value: xmrusdt
+    type: SECRET
+  - key: DATABASE_URL
+    value: ${db.DATABASE_URL}
+    type: SECRET
+
+databases:
+- name: fhcharts-db
+  engine: PG
+  version: "14"
+  production: true
+  cluster_name: fhcharts-cluster
