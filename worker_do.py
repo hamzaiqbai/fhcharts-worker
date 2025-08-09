@@ -260,8 +260,99 @@ def find_hvns_and_lvns(price_levels, hvn_frac=0.6, lvn_frac=0.2):
     return hvns[:3], lvns[:len(hvns)]
 
 def compute_imbalances(price_levels_output):
-    """Compute imbalances - simplified version"""
-    return {}  # Simplified for brevity
+    """
+    price_levels_output: dict price → {buy_volume, sell_volume, …}
+    Returns a dict: price → [ { ...curr_stats,
+                                'imbalance_type': str,
+                                'imbalance_strength': str }, … ]
+    Calculates both same-level and diagonal imbalances.
+    """
+    MIN_VOL = 5.0  # minimum opposite-side volume to qualify
+    R_NORM = 3.0   # ratio ≥ 3 → "normal"
+    R_STRONG = 5.0 # ratio ≥ 5 → "strong"
+    R_HEAVY = 7.0  # ratio ≥ 7 → "heavy"
+    
+    imbalance_map = {}
+    
+    # Convert string keys to float keys for computation if needed
+    float_price_levels = {}
+    for price_key, data in price_levels_output.items():
+        price_float = float(price_key)
+        float_price_levels[price_float] = data
+    
+    prices = sorted(float_price_levels.keys())
+
+    # infer bin size from price spacing (default to 0 if only one level)
+    if len(prices) > 1:
+        bin_size = round(prices[1] - prices[0], 2)
+    else:
+        bin_size = 0.0
+
+    for price in prices:
+        curr   = float_price_levels[price]
+        buy_v  = curr["buy_volume"]
+        sell_v = curr["sell_volume"]
+
+        # 1) same-level BUY imbalance
+        if sell_v > MIN_VOL:
+            ratio = buy_v / sell_v
+            if ratio >= R_NORM:
+                strength = ("heavy" if ratio >= R_HEAVY else
+                            "strong" if ratio >= R_STRONG else
+                            "normal")
+                imbalance_map.setdefault(price, []).append({
+                    **curr,
+                    "imbalance_type":     "buy_same_level",
+                    "imbalance_strength": strength
+                })
+
+        # 2) same-level SELL imbalance
+        if buy_v > MIN_VOL:
+            ratio = sell_v / buy_v
+            if ratio >= R_NORM:
+                strength = ("heavy" if ratio >= R_HEAVY else
+                            "strong" if ratio >= R_STRONG else
+                            "normal")
+                imbalance_map.setdefault(price, []).append({
+                    **curr,
+                    "imbalance_type":     "sell_same_level",
+                    "imbalance_strength": strength
+                })
+
+        # ───────────── diagonal imbalances ────────────────────────────────
+        if bin_size > 0:
+
+            # 3) BUY-diagonal  =  Ask(P) / Bid(P-bin)
+            prev_price = round(price - bin_size, 2)
+            prev_bid   = float_price_levels.get(prev_price, {}).get("sell_volume", 0.0)
+            if prev_bid > MIN_VOL:
+                ratio = buy_v / prev_bid           # ← Ask ÷ Bid
+                if ratio >= R_NORM:
+                    strength = ("heavy" if ratio >= R_HEAVY else
+                                "strong" if ratio >= R_STRONG else
+                                "normal")
+                    imbalance_map.setdefault(price, []).append({
+                        **curr,
+                        "imbalance_type":     "buy_diagonal",
+                        "imbalance_strength": strength
+                    })
+
+            # 4) SELL-diagonal =  Bid(P) / Ask(P+bin)
+            next_price = round(price + bin_size, 2)
+            next_ask   = float_price_levels.get(next_price, {}).get("buy_volume", 0.0)
+            if next_ask > MIN_VOL:
+                ratio = sell_v / next_ask          # ← Bid ÷ Ask
+                if ratio >= R_NORM:
+                    strength = ("heavy" if ratio >= R_HEAVY else
+                                "strong" if ratio >= R_STRONG else
+                                "normal")
+                    imbalance_map.setdefault(price, []).append({
+                        **curr,
+                        "imbalance_type":     "sell_diagonal",
+                        "imbalance_strength": strength
+                    })
+
+    return imbalance_map
 
 def format_row(b, bin_size):
     """Format a bucket into database row format"""
