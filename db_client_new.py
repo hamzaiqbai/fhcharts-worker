@@ -25,13 +25,8 @@ try:
     config = DatabaseConfig()
     DATABASE_URL = config.get_connection_string()
 except ImportError:
-    # Fallback to environment variable
-    DATABASE_URL = os.getenv('DATABASE_URL')
-    if not DATABASE_URL:
-        raise ValueError(
-            "DATABASE_URL not found. Set DATABASE_URL environment variable "
-            "or ensure config.py is available with proper configuration"
-        )
+    # Fallback with DigitalOcean credentials
+    DATABASE_URL = "postgresql://doadmin:AVNS_wHb-IBfuVa4-6cZdP5J@db-postgresql-sgp1-89042-do-user-24496237-0.g.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
 
 class FHChartsDatabase:
     """Database client for FHCharts with connection pooling and query methods"""

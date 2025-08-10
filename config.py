@@ -13,25 +13,14 @@ class DatabaseConfig:
         # Try to get from environment first (for production)
         self.database_url = os.getenv('DATABASE_URL')
         
-        # Fallback to environment variables or error (for development)
+        # Fallback to hardcoded connection (for development)
         if not self.database_url:
-            # Try individual environment variables
-            db_host = os.getenv('DB_HOST')
-            db_user = os.getenv('DB_USER') 
-            db_password = os.getenv('DB_PASSWORD')
-            db_name = os.getenv('DB_NAME', 'defaultdb')
-            db_port = os.getenv('DB_PORT', '25060')
-            
-            if all([db_host, db_user, db_password]):
-                self.database_url = (
-                    f"postgresql://{db_user}:{db_password}@{db_host}:"
-                    f"{db_port}/{db_name}?sslmode=require"
-                )
-            else:
-                raise ValueError(
-                    "DATABASE_URL not found. Set DATABASE_URL environment variable "
-                    "or DB_HOST, DB_USER, DB_PASSWORD environment variables"
-                )
+            # DigitalOcean PostgreSQL credentials
+            self.database_url = (
+                "postgresql://doadmin:AVNS_wHb-IBfuVa4-6cZdP5J@"
+                "db-postgresql-sgp1-89042-do-user-24496237-0.g.db.ondigitalocean.com:"
+                "25060/defaultdb?sslmode=require"
+            )
     
     def get_connection_string(self) -> str:
         """Get the database connection string"""
