@@ -1,5 +1,5 @@
 """
-Main application for DigitalOcean App Platform with DOM capture
+Main application for DigitalOcean App Platform with Main Worker + DOM Capture
 """
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
@@ -51,68 +51,69 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-def start_dom_capture():
-    """Start DOM capture service"""
-    try:
-        logger.info("🚀 Starting DOM capture service...")
-        
-        # Import DOM worker
-        from dom_database_worker import DOMDatabaseWorker
-        import time
-        
-        # Test DOM worker
-        worker = DOMDatabaseWorker("XMRUSDT")
-        if worker.enabled:
-            logger.info("✅ DOM worker enabled")
-            
-            # Save a test snapshot to verify it works
-            test_bids = {275.50: 10.0}
-            test_asks = {275.51: 8.0}
-            success = worker.save_snapshot(time.time(), test_bids, test_asks)
-            logger.info(f"📊 Test DOM snapshot: {success}")
-            
-            # Try to start headless capture
-            try:
-                from headless_dom_capture import HeadlessDOMCapture
-                capture = HeadlessDOMCapture("XMRUSDT")
-                asyncio.run(capture.start())
-            except ImportError:
-                logger.warning("⚠️ Headless capture not available, using worker only")
-                
-        else:
-            logger.error("❌ DOM worker not enabled")
-            
-    except Exception as e:
-        logger.error(f"❌ DOM capture error: {e}")
-
 def start_health_server():
     """Start health check server in background thread"""
     server = HTTPServer(('0.0.0.0', 8080), HealthCheckHandler)
     server.serve_forever()
 
+async def run_main_worker():
+    """Run the main worker in async context"""
+    try:
+        # Import inside the function to avoid import-time issues
+        from worker_do import main
+        logger.info("Starting main worker...")
+        await main()
+    except ImportError as e:
+        logger.error(f"Main worker import failed (DATABASE_URL required): {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Main worker failed: {e}")
+        raise
+
+async def run_dom_capture():
+    """Run DOM capture in async context"""
+    try:
+        # Import inside the function to avoid import-time issues  
+        from orderbook_do import run_orderbook_manager
+        logger.info("Starting DOM capture...")
+        await run_orderbook_manager()
+    except ImportError as e:
+        logger.error(f"DOM capture import failed: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"DOM capture failed: {e}")
+        raise
+
+async def run_all_services():
+    """Run both main worker and DOM capture concurrently"""
+    tasks = [
+        asyncio.create_task(run_main_worker()),
+        asyncio.create_task(run_dom_capture())
+    ]
+    
+    # Run both services concurrently
+    try:
+        await asyncio.gather(*tasks, return_exceptions=True)
+    except Exception as e:
+        logger.error(f"Services failed: {e}")
+
 if __name__ == '__main__':
-    logger.info("🎯 Starting DigitalOcean App with DOM capture")
+    logger.info("Starting DigitalOcean App with Main Worker + DOM Capture")
     
     # Start health check server in background
     health_thread = threading.Thread(target=start_health_server, daemon=True)
     health_thread.start()
-    logger.info("✅ Health check server started on port 8080")
+    logger.info("Health check server started on port 8080")
     
-    # Start DOM capture
+    # Start both services
     try:
-        start_dom_capture()
+        asyncio.run(run_all_services())
+    except KeyboardInterrupt:
+        logger.info("Shutting down services...")
     except Exception as e:
-        logger.error(f"❌ Failed to start DOM capture: {e}")
+        logger.error(f"Failed to start services: {e}")
         
-        # Fallback to original worker
-        logger.info("🔄 Falling back to original worker...")
-        try:
-            from worker_do import main
-            asyncio.run(main())
-        except Exception as worker_error:
-            logger.error(f"❌ Worker also failed: {worker_error}")
-            
-            # Keep health server running
-            logger.info("🏥 Keeping health server running...")
-            while True:
-                time.sleep(60)
+        # Keep health server running for debugging
+        logger.info("Keeping health server running...")
+        while True:
+            time.sleep(60)
