@@ -9,6 +9,7 @@ from collections import defaultdict
 from typing import Dict, List, Optional
 import time
 import psycopg2
+import psycopg2.errors
 from psycopg2.extras import Json
 import os
 import logging
@@ -86,6 +87,8 @@ class OrderBookManagerDO:
         """Create the dom_snapshots table if it does not exist."""
         try:
             assert self.db_cur is not None
+            
+            # Create the table without unique constraint to avoid conflicts
             self.db_cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS public.dom_snapshots (
@@ -98,8 +101,7 @@ class OrderBookManagerDO:
                     best_bid_price NUMERIC NOT NULL,
                     best_bid_qty NUMERIC NOT NULL,
                     best_ask_price NUMERIC NOT NULL,
-                    best_ask_qty NUMERIC NOT NULL,
-                    UNIQUE(symbol, update_id)
+                    best_ask_qty NUMERIC NOT NULL
                 );
                 
                 CREATE INDEX IF NOT EXISTS idx_dom_snapshots_symbol_ts 
@@ -107,8 +109,12 @@ class OrderBookManagerDO:
                 
                 CREATE INDEX IF NOT EXISTS idx_dom_snapshots_update_id 
                 ON public.dom_snapshots(update_id);
+                
+                CREATE INDEX IF NOT EXISTS idx_dom_snapshots_symbol_update_id 
+                ON public.dom_snapshots(symbol, update_id);
                 """
             )
+            
             self.db_conn.commit()
             logger.info("DOM snapshots table ready")
         except Exception as e:
@@ -137,12 +143,12 @@ class OrderBookManagerDO:
             self.connect_db()
             assert self.db_cur is not None and self.db_conn is not None
 
+            # Simple INSERT without ON CONFLICT to avoid constraint issues
             self.db_cur.execute(
                 """
                 INSERT INTO public.dom_snapshots
                 (symbol, update_id, bids, asks, best_bid_price, best_bid_qty, best_ask_price, best_ask_qty)
                 VALUES (%s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s)
-                ON CONFLICT (symbol, update_id) DO NOTHING
                 """,
                 (
                     self.symbol,
@@ -161,8 +167,14 @@ class OrderBookManagerDO:
             if update_id % 100 == 0:
                 logger.info(f"DOM snapshot saved for {self.symbol}, update_id: {update_id}")
                 
+        except psycopg2.errors.UniqueViolation:
+            # Duplicate update_id, just skip and rollback
+            if self.db_conn:
+                self.db_conn.rollback()
+            # Don't log this as an error since duplicates are expected
+            pass
         except Exception as e:
-            # Rollback on failure and log
+            # Rollback on failure and log other errors
             if self.db_conn:
                 self.db_conn.rollback()
             logger.error(f"DB insert error for update_id {update_id}: {e}")
