@@ -33,7 +33,7 @@ TICK_SIZE = 0.01
 # Configuration: timeframes in ms and corresponding price bin sizes
 TF_CONFIG = {
     '1m':  {'ms': 1 * 60 * 1000,  'bin_size': 0.01},
-    '3m':  {'ms': 3 * 60 * 1000,  'bin_size': 0.10},
+    '3m':  {'ms': 3 * 60 * 1000,  'bin_size': 0.05},
     '5m':  {'ms': 5 * 60 * 1000,  'bin_size': 0.10},
     '15m': {'ms':15 * 60 * 1000,  'bin_size': 0.20},
     '30m': {'ms':30 * 60 * 1000,  'bin_size': 0.30},
