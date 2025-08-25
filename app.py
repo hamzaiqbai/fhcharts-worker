@@ -1,8 +1,9 @@
-from dotenv import load_dotenv
-load_dotenv()
 """
 Main application for DigitalOcean App Platform with Main Worker + DOM Capture
 """
+from dotenv import load_dotenv
+load_dotenv()
+import worker_do
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from db_postgres import get_db
 import logging
@@ -53,13 +54,13 @@ def start_health_server():
     except KeyboardInterrupt:
         logger.info("Health check server stopped.")
 
+
 async def run_main_worker():
-    # Placeholder for main worker logic
-    while True:
-        await asyncio.sleep(60)
+    # Run the actual worker logic from worker_do.py
+    await worker_do.main()
 
 async def run_all_services():
-    """Run only the main worker (DOM capture removed)"""
+    """Run both the health check server and the main worker"""
     tasks = [
         asyncio.create_task(run_main_worker())
     ]
