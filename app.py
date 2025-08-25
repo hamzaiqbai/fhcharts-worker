@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 """
 Main application for DigitalOcean App Platform with Main Worker + DOM Capture
 """
