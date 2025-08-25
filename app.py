@@ -1,8 +1,6 @@
 """
 Main application for DigitalOcean App Platform with Main Worker + DOM Capture
 """
-from dotenv import load_dotenv
-load_dotenv()
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from db_postgres import get_db
 import logging
