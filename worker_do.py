@@ -56,6 +56,30 @@ def classify_order_type(maker_flag: bool) -> str:
     """If maker_flag is True, this was a resting limit order; if False, it was a market (taker) order."""
     return 'limit' if maker_flag else 'market'
 
+def floor_to_bin(price, bin_size, tick_size=0.01):
+    """Floor price down to bin boundary (for market sells/bid liquidity)"""
+    price_q = round(price / tick_size) * tick_size
+    bin_p = math.floor(price_q / bin_size) * bin_size
+    return round(bin_p, 2)
+
+def ceil_to_bin(price, bin_size, tick_size=0.01):
+    """Ceiling price up to bin boundary (for market buys/ask liquidity)"""
+    price_q = round(price / tick_size) * tick_size
+    bin_p = math.ceil(price_q / bin_size) * bin_size
+    return round(bin_p, 2)
+
+def floor_to_bin(price, bin_size, tick_size=0.01):
+    """Floor price down to bin boundary (for market sells/bid liquidity)"""
+    price_q = round(price / tick_size) * tick_size
+    bin_p = math.floor(price_q / bin_size) * bin_size
+    return round(bin_p, 2)
+
+def ceil_to_bin(price, bin_size, tick_size=0.01):
+    """Ceiling price up to bin boundary (for market buys/ask liquidity)"""
+    price_q = round(price / tick_size) * tick_size
+    bin_p = math.ceil(price_q / bin_size) * bin_size
+    return round(bin_p, 2)
+
 def should_reset_cvd(tf, prev_ts_ms, curr_ts_ms):
     prev_dt = datetime.utcfromtimestamp(prev_ts_ms / 1000)
     curr_dt = datetime.utcfromtimestamp(curr_ts_ms / 1000)
@@ -418,8 +442,8 @@ def process_trade(trade):
         return
     
     ts = trade['T']
-    is_sell = trade['m']
-    maker_flag = trade['m']
+    maker_flag = trade['m']  # True if buyer was maker (market sell), False if seller was maker (market buy)
+    is_buyer_maker = maker_flag  # Same as PriceLadder.py naming convention
     order_type = classify_order_type(maker_flag)
     n_tr = trade['l'] - trade['f'] + 1
 
@@ -459,11 +483,13 @@ def process_trade(trade):
 
         # Volume & contracts
         curr['total_volume'] += qty
-        if is_sell:
+        if is_buyer_maker:
+            # buyer is maker = seller is taker = market sell = consumes bid liquidity
             curr['sell_volume'] += qty
             curr['sell_contracts'] += n_tr
             curr['delta'] -= qty
         else:
+            # seller is maker = buyer is taker = market buy = consumes ask liquidity
             curr['buy_volume'] += qty
             curr['buy_contracts'] += n_tr
             curr['delta'] += qty
@@ -473,10 +499,10 @@ def process_trade(trade):
             global_cvd_state[tf] = 0.0
 
         # Update global and current bucket CVD
-        if is_sell:
-            global_cvd_state[tf] -= qty
+        if is_buyer_maker:
+            global_cvd_state[tf] -= qty  # market sell
         else:
-            global_cvd_state[tf] += qty
+            global_cvd_state[tf] += qty  # market buy
 
         curr['CVD'] = global_cvd_state[tf]
         last_cvd_ts[tf] = ts
@@ -485,13 +511,18 @@ def process_trade(trade):
         curr['max_delta'] = max(curr['max_delta'], curr['delta'])
         curr['min_delta'] = min(curr['min_delta'], curr['delta'])
 
-        # Price binning
-        price_q = round(price / TICK_SIZE) * TICK_SIZE
-        bin_p = math.floor(price_q / bin_size) * bin_size
-        bin_p = round(bin_p, 2)
+        # Price binning using correct Binance aggregation method
+        if is_buyer_maker:
+            # Market sell (consumes bid liquidity) - use FLOOR
+            bin_p = floor_to_bin(price, bin_size, TICK_SIZE)
+            side_vol_key = 'sell_volume'
+            side_ctr_key = 'sell_contracts'
+        else:
+            # Market buy (consumes ask liquidity) - use CEILING
+            bin_p = ceil_to_bin(price, bin_size, TICK_SIZE)
+            side_vol_key = 'buy_volume'
+            side_ctr_key = 'buy_contracts'
         
-        side_vol_key = 'sell_volume' if is_sell else 'buy_volume'
-        side_ctr_key = 'sell_contracts' if is_sell else 'buy_contracts'
         curr['price_bins'][bin_p][side_vol_key] += qty
         curr['price_bins'][bin_p][side_ctr_key] += n_tr
 
