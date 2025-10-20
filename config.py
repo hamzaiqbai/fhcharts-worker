@@ -17,11 +17,9 @@ class DatabaseConfig:
         if not self.database_url:
             # DigitalOcean PostgreSQL credentials
             self.database_url = (
-                "postgresql://doadmin:AVNS_yoMLq9aG81l7vM6Om6z@"
-                "db-postgresql-sgp1-37525-do-user-24496237-0.f.db.ondigitalocean.com:"
+                "postgresql://doadmin:AVNS_E2vqYGAy_CS8qRj0cD5@"
+                "db-postgresql-sgp1-27622-do-user-20207893-0.e.db.ondigitalocean.com:"
                 "25060/defaultdb?sslmode=require"
-
-
             )
     
     def get_connection_string(self) -> str:
